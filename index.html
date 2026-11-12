@@ -21,7 +21,7 @@
   html, body { margin: 0; }
   body { font-family: var(--font); font-size: 17px; line-height: 1.3; color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; }
   a { color: inherit; text-decoration: none; }
-  .app { max-width: 1240px; margin: 0 auto; padding: 24px 28px 48px; }
+  .app { max-width: 1480px; margin: 0 auto; padding: 24px 28px 48px; }
 
   .top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
   h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; margin: 0; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -55,7 +55,27 @@
   .now.late .k, .now.late .in, .now.late .t { color: var(--late); }
   .now.quiet .w { font-size: 20px; color: var(--muted); font-weight: 500; }
 
-  .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
+  .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) 290px; gap: 20px; align-items: start; }
+
+  /* ---------- day calendar ---------- */
+  .cal { background: var(--tile); border-radius: 24px; padding: 18px 16px 14px 14px; min-width: 0; }
+  .cal h2 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+  .cal h2 .n { margin-left: auto; font-size: 14px; font-weight: 500; color: var(--muted); }
+  .cal .grid { position: relative; margin-left: 44px; }
+  .cal .hr { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+  .cal .hr b { position: absolute; left: -46px; top: -7px; width: 40px; text-align: right; font-size: 11px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cal .ev { position: absolute; border-radius: 8px; background: color-mix(in srgb, var(--c) 24%, var(--tile)); border-left: 3px solid var(--c); padding: 3px 8px; min-height: 22px; overflow: hidden; font-size: 12.5px; line-height: 1.25; }
+  .cal .ev b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal .ev span { color: var(--muted); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .cal .ev.done { opacity: .4; }
+  .cal .ev.late { box-shadow: inset 0 0 0 1.5px var(--late); }
+  .cal .ev.soft { background: transparent; border-left-style: dashed; box-shadow: inset 0 0 0 1px var(--line); }
+  .cal .nowline { position: absolute; left: -4px; right: 0; height: 2px; background: var(--late); z-index: 2; }
+  .cal .nowline::before { content: ''; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--late); }
+  @media (max-width: 1180px) {
+    .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cal { grid-column: 1 / -1; }
+  }
   .colm { display: grid; gap: 20px; min-width: 0; }
   .tile { background: var(--tile); border-radius: 24px; padding: 18px 22px 10px; min-width: 0; }
   .tile h2 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 8px; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; color: var(--c); }
@@ -105,6 +125,7 @@
     .now .in { font-size: 24px; }
     .board { grid-template-columns: 1fr; gap: 14px; }
     .colm { display: contents; }
+    .cal { order: 8; border-radius: 20px; }
     .tile { border-radius: 20px; padding: 14px 16px 8px; }
     .tile.o1 { order: 1; } .tile.o2 { order: 2; } .tile.o3 { order: 3; } .tile.o4 { order: 4; } .tile.o5 { order: 5; } .tile.o6 { order: 6; } .tile.o7 { order: 7; } .tile.o8 { order: 8; }
     .ln { grid-template-columns: 92px minmax(0, 1fr) 26px; gap: 10px; }
@@ -545,6 +566,58 @@
     el.innerHTML = `<div><div class="k">Done</div></div><div class="w">Everything for today is ticked.</div>`;
   }
 
+  // ---------- Day calendar: grouped blocks by time ----------
+  const PX_PER_MIN = 54 / 60;
+  function calendarHTML(tiles, dateStr, isToday, nowMin) {
+    const blocks = [];
+    const doneAll = (lines) => lines.every((l) => lineState(l, dateStr).done);
+    const lateAny = (lines) => isToday && lines.some((l) => { const st = lineState(l, dateStr); const end = l.endMin ?? l.min; return !st.done && end != null && end < nowMin; });
+    const timed = (t) => t.lines.filter((l) => l.min != null).sort(byMin);
+    for (const t of tiles) {
+      const ls = timed(t);
+      if (!ls.length) continue;
+      if (t.id === 'burn' || t.id === 'harv') {
+        const gap = t.id === 'burn' ? 20 : 30;
+        blocks.push({ start: ls[0].min, end: ls[ls.length - 1].min + gap, color: t.color, title: ls.length === 1 ? (t.id === 'burn' ? 'Burn ' : 'Harvest ') + ls[0].label : `${ls.length} ${t.id === 'burn' ? 'burns' : 'harvests'}`, done: doneAll(ls), late: lateAny(ls) });
+      } else if (t.id === 'bupe') {
+        for (const l of ls) blocks.push({ start: l.min, end: l.endMin ?? l.min + 120, color: t.color, title: l.ids ? `Bupe · ${l.label}` : `Bupe ${l.label}`, done: doneAll([l]), late: lateAny([l]) });
+      } else if (t.id === 'txa') {
+        for (const l of ls) blocks.push({ start: l.min, end: l.min + 25, color: t.color, title: `TXA ${l.label}`, sub: l.sub, done: doneAll([l]), late: lateAny([l]) });
+      }
+    }
+    const chk = tiles.find((t) => t.id === 'chk');
+    const first = blocks.length ? Math.min(...blocks.map((b) => b.start)) : 8 * 60;
+    const last = blocks.length ? Math.max(...blocks.map((b) => b.end)) : 17 * 60;
+    if (chk) {
+      const am = chk.lines.find((l) => l.key === 'am|all'), pm = chk.lines.find((l) => l.key === 'pm|all');
+      if (am) blocks.push({ start: first - 60, end: first, color: chk.color, title: 'AM checks', soft: true, done: doneAll([am]) });
+      if (pm) blocks.push({ start: last, end: last + 60, color: chk.color, title: 'PM check', soft: true, done: doneAll([pm]) });
+    }
+    if (!blocks.length) return '';
+    const h0 = Math.min(7, Math.floor(Math.min(...blocks.map((b) => b.start)) / 60));
+    const h1 = Math.max(19, Math.ceil(Math.max(...blocks.map((b) => b.end)) / 60));
+    const H = (h1 - h0) * 60 * PX_PER_MIN;
+    const y = (min) => (min - h0 * 60) * PX_PER_MIN;
+    blocks.sort((a, b) => a.start - b.start || a.end - b.end);
+    // Overlapping blocks share the width, side by side.
+    let cluster = null;
+    for (const b of blocks) {
+      if (!cluster || b.start >= cluster.end) { cluster = { end: b.end, cols: [], items: [] }; }
+      let col = cluster.cols.findIndex((e) => e <= b.start);
+      if (col < 0) col = cluster.cols.length;
+      cluster.cols[col] = b.end; cluster.end = Math.max(cluster.end, b.end);
+      b.col = col; b.cluster = cluster; cluster.items.push(b);
+    }
+    let html = '';
+    for (let h = h0; h <= h1; h++) html += `<div class="hr" style="top:${y(h * 60)}px"><b>${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}</b></div>`;
+    for (const b of blocks) {
+      const n = b.cluster.cols.length, w = 100 / n;
+      html += `<div class="ev${b.done ? ' done' : ''}${b.late ? ' late' : ''}${b.soft ? ' soft' : ''}" style="--c:${b.color};top:${y(b.start)}px;height:${Math.max(22, (b.end - b.start) * PX_PER_MIN - 2)}px;left:calc(${b.col * w}% + ${b.col ? 3 : 0}px);width:calc(${w}% - ${n > 1 ? 3 : 0}px)"><b>${esc(b.title)}</b><span>${b.soft ? (b.title.startsWith('AM') ? 'before the first task' : 'after the last task') : esc(b.sub ? fmtMin(b.start) + ' · ' + b.sub : fmtMin(b.start) + ' – ' + fmtMin(b.end))}</span></div>`;
+    }
+    if (isToday && nowMin >= h0 * 60 && nowMin <= h1 * 60) html += `<div class="nowline" style="top:${y(nowMin)}px"></div>`;
+    return `<section class="cal"><h2>Day<span class="n">${esc(fmtMin(h0 * 60))} – ${esc(fmtMin(h1 * 60))}</span></h2><div class="grid" style="height:${H}px">${html}</div></section>`;
+  }
+
   function render() {
     try { renderInner(); }
     catch (e) { $('board').innerHTML = `<div class="notice bad">Page error while drawing ${esc(md(view))}: ${esc(e.message)}</div>`; }
@@ -582,6 +655,7 @@
     const byId = Object.fromEntries(tiles.map((t) => [t.id, t])); byId.tmrw = tmrw;
     let html = '';
     for (const c of [1, 2, 3]) html += `<div class="colm">${col[c].map((id) => byId[id] ? tileHTML(byId[id], dateStr, isToday, nowMin, nextKey, order[id]) : '').join('')}</div>`;
+    html += calendarHTML(tiles, dateStr, isToday, nowMin);
     $('board').innerHTML = html;
     updateTitle();
   }
