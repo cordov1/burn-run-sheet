@@ -15,6 +15,11 @@
  *   ?action=set&date=11/12&key=<key>&done=1&by=BA            -> same shape, after writing
  *   ?action=set&date=11/12&key=<key>&done=0                  -> same shape, after removing the tick
  */
+
+/**
+ * @OnlyCurrentDoc
+ * (limits the authorization to the spreadsheet this script is attached to - nothing else in Drive)
+ */
 var SHEET_NAME = 'Ticks';
 
 function doGet(e) {
@@ -44,11 +49,17 @@ function sheet_() {
   return sh;
 }
 
+// Rows are read as the text the sheet DISPLAYS: when a row is appended, Sheets turns "11/12" into a date
+// and "9:05 AM" into a time, but it keeps showing them exactly as they were sent.
+function rows_(sh) {
+  return sh.getDataRange().getDisplayValues();
+}
+
 function read_(date) {
-  var rows = sheet_().getDataRange().getValues();
+  var rows = rows_(sheet_());
   var out = {};
   for (var i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === date) out[String(rows[i][1])] = { by: String(rows[i][2] || ''), at: String(rows[i][3] || '') };
+    if (rows[i][0].trim() === date) out[rows[i][1].trim()] = { by: rows[i][2].trim(), at: rows[i][3].trim() };
   }
   return out;
 }
@@ -56,9 +67,9 @@ function read_(date) {
 function write_(date, key, done, by) {
   if (!key) return;
   var sh = sheet_();
-  var rows = sh.getDataRange().getValues();
+  var rows = rows_(sh);
   for (var i = rows.length - 1; i >= 1; i--) {
-    if (String(rows[i][0]) === date && String(rows[i][1]) === key) sh.deleteRow(i + 1);
+    if (rows[i][0].trim() === date && rows[i][1].trim() === key) sh.deleteRow(i + 1);
   }
   if (done) sh.appendRow([date, key, by, Utilities.formatDate(new Date(), 'America/Chicago', 'h:mm a')]);
 }
