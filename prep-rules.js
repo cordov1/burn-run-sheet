@@ -1,24 +1,22 @@
-// Prep-for-tomorrow rules for the burn timecourse run sheet.
-// This is the only file to edit for prep. The page reads it on every load.
+// Prep-for-tomorrow rules. Edit this file and push; the Tomorrow tile follows it.
 //
-// Each rule says: when TOMORROW has <when>, put <task> on TODAY's prep list.
-//   when:  "injury" | "harvest" | "txa" | "bupe" | "am_check" | "pm_check" | "any"
-//   per:   "mouse" -> one line per matching mouse      "day" -> one line if there is at least one match
-//   task:  text to show. Placeholders are filled in:
-//            per mouse: {tag} {tp} {arm} {time}  plus any MOUSE_INFO field, e.g. {lung}
-//            per day:   {n} (how many)  {tags} (the IDs, comma-separated)
-//   match: optional filter, keep only mice whose field equals the value, e.g. { tp: "6h" }, { arm: "BURN + TXA" }, { lung: "inflation" }
-//   time:  optional text for the time column, e.g. "evening" or "before 5 PM"
-//   id:    optional stable name, so ticks survive re-ordering of this list
-//
-// Example rules (remove the // to turn one on):
-//   { id: "shave",  when: "injury",  per: "day",   time: "evening", task: "Shave tomorrow's {n} injury mice: {tags}" },
-//   { id: "labels", when: "harvest", per: "mouse", task: "Print tube labels for {tag} ({tp}, {arm}, {lung})" },
+// Each rule looks at what the Calendar lists for TOMORROW and adds a line to today's Tomorrow tile.
+//   when:  which list tomorrow is read from: "injury" | "harvest" | "txa" | "bupe" | "am_check" | "pm_check" | "any"
+//   match: only keep items whose fields equal these values. Injury items have tag, tp, arm, time, txa ("yes"/"no"), burn ("yes"/"no").
+//          Harvest items have tag, tp, arm, time, txa, sameDay. Mouse-level extras can be added in MOUSE_INFO below.
+//   per:   "day"   = one line for the whole group (placeholders {n} = how many, {tags} = the mouse IDs)
+//          "mouse" = one line per mouse (placeholders {tag} {tp} {arm} {time} + any MOUSE_INFO fields)
+//   label: the bold text of the line;  task: the muted text after it;  ids: true lists the mouse IDs under a "day" line
+//   time:  short text shown in the time column ("today", "tonight", "4:00 PM" ...)
+//   id:    a stable name for the tick (keep it unchanged once people are ticking)
 
 window.PREP_RULES = [
+  { id: 'shave', when: 'injury', match: { burn: 'yes' }, per: 'day', time: 'today',
+    label: 'Shave · {n} mice', task: 'burned tomorrow', ids: true },
+  { id: 'waterbath', when: 'injury', match: { burn: 'yes' }, per: 'day', time: 'tonight',
+    label: 'Water bath', task: 'turn on tonight · {n} burns tomorrow' },
 ];
 
-// Per-mouse facts that are not on the Sheet. Usable in match: and as {placeholders}.
+// Extra per-mouse facts the rules can match on or print, e.g. { "29562": { lung: "inflation" } }.
 window.MOUSE_INFO = {
-  // "29562": { lung: "inflation" },
 };

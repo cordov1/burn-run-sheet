@@ -124,7 +124,6 @@
   <div class="board" id="board"></div>
   <footer class="foot"><span>Reads the Google Sheet live · never writes to it · Central time</span><span id="tickStatus"></span></footer>
 </div>
-<script src="prep-rules.js"></script>
 <script>
 (() => {
   'use strict';
@@ -390,8 +389,8 @@
   function prepTasks(rules, p, chk) {
     const info = (tag) => (window.MOUSE_INFO && window.MOUSE_INFO[tag]) || {};
     const pools = {
-      injury: p.injuries.map((i) => ({ tag: i.tag, tp: i.tp, arm: armLabel(i.arm), time: i.target, txa: hasTXA(i.arm) ? 'yes' : 'no', ...info(i.tag) })),
-      harvest: p.harvests.filter((h) => !h.info).map((h) => ({ tag: h.tag, tp: h.tp, arm: armLabel(h.arm), time: h.due, txa: hasTXA(h.arm) ? 'yes' : 'no', sameDay: h.sameDay ? 'yes' : 'no', ...info(h.tag) })),
+      injury: p.injuries.map((i) => ({ tag: i.tag, tp: i.tp, arm: armLabel(i.arm), time: i.target, txa: hasTXA(i.arm) ? 'yes' : 'no', burn: /BURN/.test(i.arm) ? 'yes' : 'no', ...info(i.tag) })),
+      harvest: p.harvests.filter((h) => !h.info).map((h) => ({ tag: h.tag, tp: h.tp, arm: armLabel(h.arm), time: h.due, txa: hasTXA(h.arm) ? 'yes' : 'no', burn: /BURN/.test(h.arm) ? 'yes' : 'no', sameDay: h.sameDay ? 'yes' : 'no', ...info(h.tag) })),
       txa: [...new Set(p.txa.map((t) => t.tag))].map((tag) => ({ tag, time: (p.txa.find((t) => t.tag === tag) || {}).due || '', ...info(tag) })),
       bupe: p.bupe.map((b) => ({ tag: b.tag, time: b.window, ...info(b.tag) })),
       am_check: chk.mice.filter((m) => m.am).map((m) => ({ tag: m.tag, note: m.note, ...info(m.tag) })),
@@ -406,8 +405,8 @@
       if (rule.match) items = items.filter((it) => Object.entries(rule.match).every(([k, v]) => String(it[k] ?? '').toLowerCase() === String(v).toLowerCase()));
       if (!items.length) return;
       const id = rule.id || ('rule' + (idx + 1));
-      if (rule.per === 'mouse') items.forEach((it) => tasks.push({ key: `prep|${id}|${it.tag}`, time: rule.time || '', timeNone: '', label: it.tag, sub: fill(rule.task, it), summary: fill(rule.task, it) }));
-      else { const it = { n: items.length, tags: items.map((i) => i.tag).filter(Boolean).join(', ') }; tasks.push({ key: `prep|${id}`, time: rule.time || '', timeNone: '', label: '', sub: fill(rule.task, it), summary: fill(rule.task, it) }); }
+      if (rule.per === 'mouse') items.forEach((it) => { const label = rule.label ? fill(rule.label, it) : it.tag; tasks.push({ key: `prep|${id}|${it.tag}`, time: rule.time || '', timeNone: '', label, sub: fill(rule.task, it), summary: [label, fill(rule.task, it)].filter(Boolean).join(' · ') }); });
+      else { const tags = items.map((i) => i.tag).filter(Boolean); const it = { n: items.length, tags: tags.join(', ') }; const label = fill(rule.label, it); tasks.push({ key: `prep|${id}`, time: rule.time || '', timeNone: '', label, sub: fill(rule.task, it), ids: rule.ids ? tags.join(' · ') : '', summary: [label, fill(rule.task, it)].filter(Boolean).join(' · ') }); }
     });
     return tasks;
   }
@@ -692,11 +691,21 @@
   setInterval(() => { render(); checkAlerts(); }, 30000);
   setInterval(tickClock, 1000);
 
+  // Prep rules are loaded fresh on every page load (no browser cache), so edits to prep-rules.js show up on the next refresh.
+  function loadRules() {
+    const s = document.createElement('script');
+    s.src = 'prep-rules.js?t=' + Date.now();
+    s.onload = render;
+    s.onerror = () => { window.PREP_RULES = window.PREP_RULES || []; render(); };
+    document.head.appendChild(s);
+  }
+
   loadLocal();
   showInitials();
   setAlerts(alertsOn);
   tickClock();
   render();
+  loadRules();
   refreshSheet();
   loadShared(md(view));
 })();
