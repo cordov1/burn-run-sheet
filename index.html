@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Burn Timecourse Run Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one column of task sections under a sticky date bar; a row reads tick -> time -> mouse + what -> who/when. */
+:root {
+  --bg: #f2f4f7; --surface: #ffffff; --fg: #17212b; --muted: #5e6b78; --line: #d9e0e7; --line-strong: #aeb9c4;
+  --accent: #1d5fc2; --accent-soft: #e3ecfb;
+  --ok: #1e7b3c; --ok-soft: #e4f4e9; --warn: #9a5600; --warn-soft: #fff0d6; --bad: #b32626; --bad-soft: #fce6e6;
+  --txa: #6b3fa0; --txa-soft: #efe6fb;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1317; --surface: #171d24; --fg: #e8edf2; --muted: #97a4b1; --line: #2a343e; --line-strong: #46525e;
+    --accent: #7fb0ff; --accent-soft: #1b2a42;
+    --ok: #5fd07c; --ok-soft: #14301d; --warn: #ffb757; --warn-soft: #3a2a0f; --bad: #ff7f7f; --bad-soft: #3f1717;
+    --txa: #c9a6ff; --txa-soft: #2b1f40;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1317; --surface: #171d24; --fg: #e8edf2; --muted: #97a4b1; --line: #2a343e; --line-strong: #46525e;
+  --accent: #7fb0ff; --accent-soft: #1b2a42;
+  --ok: #5fd07c; --ok-soft: #14301d; --warn: #ffb757; --warn-soft: #3a2a0f; --bad: #ff7f7f; --bad-soft: #3f1717;
+  --txa: #c9a6ff; --txa-soft: #2b1f40;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.4; -webkit-text-size-adjust: 100%; }
+.wrap { max-width: 720px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top, 0px); }
+.bar { display: grid; gap: 6px; padding-block: 6px 0; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.brand { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.nav { display: flex; align-items: center; gap: 4px; }
+button, .btn { font: inherit; font-weight: 600; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-height: 40px; min-width: 40px; padding: 0 12px; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.date { font-size: 18px; font-weight: 700; padding: 0 6px; min-width: 120px; text-align: center; white-space: nowrap; }
+.initials { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.initials input { font: inherit; font-weight: 600; width: 52px; min-height: 30px; text-align: center; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--fg); text-transform: uppercase; }
+.status { font-size: 11px; color: var(--muted); display: flex; gap: 2px 14px; flex-wrap: wrap; align-items: center; padding-block: 0 6px; line-height: 1.3; }
+.status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 5px; vertical-align: 1px; }
+.status .dot.bad { background: var(--bad); }
+.status .dot.off { background: var(--line-strong); }
+main { padding-block: 12px 24px; display: grid; gap: 14px; }
+.notice { padding: 10px 12px; border-radius: 8px; font-size: 14px; white-space: pre-wrap; }
+.notice.warn { background: var(--warn-soft); color: var(--warn); }
+.notice.bad { background: var(--bad-soft); color: var(--bad); }
+.notice.info { background: var(--accent-soft); color: var(--fg); }
+.nextup { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.nextup h2 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+.nextup ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.nextup li { display: flex; gap: 10px; font-weight: 500; }
+.nextup .t { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 700; flex: 0 0 76px; }
+.nextup .late { margin-top: 6px; font-size: 13px; color: var(--warn); font-weight: 600; }
+section.task { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+section.task > h2 { margin: 0; padding: 10px 12px; font-size: 15px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+section.task > h2 .count { font-weight: 600; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+section.task > h2 .range { margin-left: auto; font-weight: 500; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.group-label { padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--bg); border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); min-height: 52px; cursor: pointer; }
+.row:last-child { border-bottom: 0; }
+.row input { width: 22px; height: 22px; margin: 0; flex: 0 0 auto; accent-color: var(--accent); cursor: pointer; }
+.row .time { flex: 0 0 78px; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); font-size: 15px; line-height: 1.2; }
+.row .time small { display: block; font-weight: 500; color: var(--muted); font-size: 11px; }
+.row .time.none { color: var(--muted); font-weight: 500; font-size: 12px; }
+.row .time.none:empty { display: none; }
+.row .body { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.row .tag { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 16px; }
+.row .what { overflow-wrap: anywhere; }
+.row .meta { flex: 0 0 auto; font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; max-width: 110px; }
+.row.done { background: var(--ok-soft); }
+.row.done .tag, .row.done .what, .row.done .time { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line-strong); }
+.row.done .meta { color: var(--ok); font-weight: 600; }
+.row.locked { cursor: default; }
+.row.info { cursor: default; color: var(--muted); font-size: 14px; min-height: 40px; }
+.chip { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); letter-spacing: .02em; white-space: nowrap; }
+.chip.txa { background: var(--txa-soft); color: var(--txa); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.plain { background: var(--bg); color: var(--muted); }
+.notes { white-space: pre-wrap; padding: 10px 12px; font-size: 14px; overflow-wrap: anywhere; }
+section.prep { border-color: var(--accent); }
+section.prep > h2 { background: var(--accent-soft); }
+.empty { color: var(--muted); padding: 10px 12px; font-size: 14px; }
+footer { font-size: 12px; color: var(--muted); padding-block: 8px 40px; }
+@media (prefers-reduced-motion: no-preference) { .row { transition: background .15s; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="bar">
+      <div class="top">
+        <div class="brand">Burn timecourse · run sheet</div>
+        <div class="initials"><label for="initials">Initials</label><input id="initials" maxlength="4" autocapitalize="characters" autocomplete="off"></div>
+      </div>
+      <div class="controls">
+        <div class="nav">
+          <button id="prev" aria-label="Previous day">&#9664;</button>
+          <div class="date" id="dateLabel">…</div>
+          <button id="next" aria-label="Next day">&#9654;</button>
+        </div>
+        <button id="todayBtn" hidden>Today</button>
+        <button id="refresh" aria-label="Read the Sheet again" title="Read the Sheet again">&#8635;</button>
+      </div>
+      <div class="status"><span id="sheetStatus"><span class="dot off"></span>Reading the Sheet…</span><span id="tickStatus"></span></div>
+    </div>
+  </div>
+</header>
+<main class="wrap" id="main"><div class="empty">Loading…</div></main>
+<footer class="wrap">Read live from the Google Sheet “Burn Timecourse Experiment Calendar” (Calendar and Checks tabs). This page never writes to the Sheet. Times are Central.</footer>
+<script src="prep-rules.js"></script>
+<script>
+(() => {
+  'use strict';
+  const SHEET_ID = '1hiQNkzE2BN3d4ExU9oGEm-KUc4jDhm6_3Iya5Wh0y0c';
+  const TICKS_URL = '';            // Apps Script web app URL from ticks-backend.gs. Empty = ticks stay on this device.
+  const TZ = 'America/Chicago';
+  const SHEET_REFRESH_MS = 60000;
+  const TICK_POLL_MS = 20000;
+  const COL = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18 };
+  const ID_RE = /^(\d{5})\b/;
+  const RANGE_RE = /^\d{1,2}:\d{2}\s*[AP]M\s*[-–]\s*\d{1,2}:\d{2}\s*[AP]M/i;
+  const TOTAL_RE = /^TOTAL\s+(\d+)\s*:/i;
+  const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const qs = (o) => Object.entries(o).map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
+
+  // ---------- Central time ----------
+  function centralParts() {
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' });
+    const p = {};
+    for (const x of f.formatToParts(new Date())) if (x.type !== 'literal') p[x.type] = +x.value;
+    return p;
+  }
+  const centralToday = () => { const p = centralParts(); return new Date(Date.UTC(p.year, p.month - 1, p.day, 12)); };
+  const centralNowMin = () => { const p = centralParts(); return (p.hour % 24) * 60 + p.minute; };
+  const centralClock = (withSeconds) => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit', ...(withSeconds ? { second: '2-digit' } : {}) }).format(new Date());
+  const md = (d) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+  const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
+  const longDate = (d) => `${WD[d.getUTCDay()]} ${MON[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  const fmtClock = (h, m) => `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+  const fmtMin = (min) => fmtClock(Math.floor(min / 60), min % 60);
+  function toMin(s) {
+    const m = /(\d{1,2}):(\d{2})\s*([AP])\.?M/i.exec(s || '');
+    if (!m) return null;
+    let h = (+m[1]) % 12;
+    if (m[3].toUpperCase() === 'P') h += 12;
+    return h * 60 + (+m[2]);
+  }
+
+  // ---------- Reading the Sheet (gviz JSON; JSONP fallback) ----------
+  const gvizUrl = (sheet, extra) => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(sheet)}&headers=1&tqx=out:json${extra || ''}`;
+  function parseGviz(text) {
+    const i = text.indexOf('{'), j = text.lastIndexOf('}');
+    if (i < 0 || j < i) throw new Error('unexpected answer from the Sheet');
+    const data = JSON.parse(text.slice(i, j + 1));
+    if (data.status !== 'ok') throw new Error('Sheet said ' + ((data.errors && data.errors[0] && data.errors[0].message) || data.status));
+    return data.table;
+  }
+  async function fetchTable(sheet) {
+    try {
+      const r = await fetch(gvizUrl(sheet), { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return parseGviz(await r.text());
+    } catch (e) {
+      return jsonpTable(sheet);
+    }
+  }
+  function jsonpTable(sheet) {
+    return new Promise((resolve, reject) => {
+      const cb = 'gviz_' + Math.random().toString(36).slice(2);
+      const s = document.createElement('script');
+      let timer = 0;
+      const finish = (fn) => { clearTimeout(timer); delete window[cb]; s.remove(); fn(); };
+      window[cb] = (p) => finish(() => (p && p.status === 'ok') ? resolve(p.table) : reject(new Error('Sheet said ' + (p && p.status))));
+      s.onerror = () => finish(() => reject(new Error('could not reach the Sheet')));
+      timer = setTimeout(() => finish(() => reject(new Error('the Sheet did not answer'))), 15000);
+      s.src = gvizUrl(sheet, ';responseHandler:' + cb);
+      document.head.appendChild(s);
+    });
+  }
+
+  // ---------- Cells ----------
+  const cell = (row, c) => { const x = row.c && row.c[COL[c]]; return x && x.v != null && x.v !== '' ? x : null; };
+  const str = (row, c) => { const x = cell(row, c); return x ? String(x.v).trim() : ''; };
+  function clock(row, c) {
+    const x = cell(row, c);
+    if (!x) return '';
+    if (x.f) return String(x.f).trim();
+    const m = /Date\(\d+,\d+,\d+,(\d+),(\d+)/.exec(String(x.v));
+    if (m) return fmtClock(+m[1], +m[2]);
+    if (typeof x.v === 'number' && x.v >= 0 && x.v < 1) return fmtMin(Math.round(x.v * 1440));
+    return String(x.v).trim();
+  }
+
+  // ---------- Calendar tab: day blocks (col B date, merged down the block) ----------
+  function buildDays(table) {
+    const days = [];
+    let cur = null;
+    for (const row of table.rows || []) {
+      if (!row || !row.c) continue;
+      const b = str(row, 'B');
+      if (b) { cur = { date: b, weekday: str(row, 'C'), rows: [] }; days.push(cur); }
+      if (cur) cur.rows.push(row);
+    }
+    return days;
+  }
+  function parseArmTp(text) {
+    let m = /\((?:WT\s+)?([^,()]+),\s*([^)]+)\)/.exec(text);
+    if (!m) m = /:\s*(?:WT\s+)?([^,]+),\s*([^(]+)/.exec(text);
+    return { arm: m ? m[1].replace(/\s+/g, '').toUpperCase() : '', tp: m ? m[2].trim() : '' };
+  }
+  const armLabel = (arm) => (arm.replace(/^CTX\+/, '').replace(/\+/g, ' + ')) || arm || 'CTX';
+
+  function parseDay(day) {
+    const out = { date: day.date, weekday: day.weekday, injuries: [], harvests: [], txa: [], bupe: [], info: [], checksSummary: '', imaging: [], notes: [], warnings: [] };
+    const counters = {};
+    const finish = (c) => { const k = counters[c]; if (k && k.got !== k.expected) out.warnings.push(`${k.name}: Sheet says TOTAL ${k.expected} but has ${k.got} lines`); counters[c] = null; };
+    const start = (c, name, text) => { finish(c); counters[c] = { name, expected: +TOTAL_RE.exec(text)[1], got: 0 }; };
+    const bump = (c) => { if (counters[c]) counters[c].got++; };
+    let gBlock = '', jBlock = '';
+    for (const row of day.rows) {
+      const g = str(row, 'G');
+      if (g) {
+        if (ID_RE.test(g)) { bump('G'); const { arm, tp } = parseArmTp(g); out.injuries.push({ tag: g.slice(0, 5), arm, tp, target: clock(row, 'H'), actual: clock(row, 'I'), block: gBlock }); }
+        else if (TOTAL_RE.test(g)) start('G', 'Injuries', g);
+        else if (RANGE_RE.test(g)) { finish('G'); gBlock = g; }
+        else if (/^BREAK\b/i.test(g)) { finish('G'); out.info.push(g); }
+        else out.info.push(g);
+      }
+      const j = str(row, 'J');
+      if (j) {
+        if (ID_RE.test(j)) { bump('J'); const { arm, tp } = parseArmTp(j); out.harvests.push({ tag: j.slice(0, 5), arm, tp, sameDay: /same-day/i.test(j), due: clock(row, 'K'), actual: str(row, 'L'), block: jBlock }); }
+        else if (TOTAL_RE.test(j)) start('J', 'Harvests', j);
+        else if (RANGE_RE.test(j)) { finish('J'); jBlock = j; }
+        else if (/^BREAK\b/i.test(j)) { finish('J'); out.harvests.push({ info: j, block: jBlock }); }
+        else out.info.push(j);
+      }
+      const m = str(row, 'M');
+      if (m) {
+        if (ID_RE.test(m)) {
+          bump('M');
+          const doses = m.slice(m.indexOf(':') + 1).split(',').map((s) => s.trim()).filter(Boolean);
+          const dues = str(row, 'N').split(',').map((s) => s.trim());
+          doses.forEach((dose, i) => out.txa.push({ tag: m.slice(0, 5), dose, due: dues[i] || '' }));
+        } else if (TOTAL_RE.test(m)) start('M', 'TXA', m);
+      }
+      const o = str(row, 'O');
+      if (o) {
+        if (/^\d{5}$/.test(o)) { bump('O'); out.bupe.push({ tag: o, window: str(row, 'P') }); }
+        else if (TOTAL_RE.test(o)) start('O', 'Bupe', o);
+      }
+      const q = str(row, 'Q'); if (q) out.checksSummary = q;
+      const r = str(row, 'R'); if (r) out.imaging.push(r);
+      const s = str(row, 'S'); if (s) out.notes.push(s);
+    }
+    ['G', 'J', 'M', 'O'].forEach(finish);
+    return out;
+  }
+
+  // ---------- Checks tab: one multi-line cell per date ----------
+  function buildChecks(table) {
+    const byDate = {};
+    for (const row of table.rows || []) {
+      if (!row || !row.c) continue;
+      const d = str(row, 'B');
+      if (d) byDate[d] = parseChecksText(str(row, 'D'));
+    }
+    return byDate;
+  }
+  function parseChecksText(text) {
+    const res = { head: '', mice: [] };
+    if (!text) return res;
+    const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (lines.length && /^TOTAL/i.test(lines[0])) res.head = lines.shift();
+    for (const ln of lines) {
+      const m = /^(\d{5}):\s*(.*)$/.exec(ln);
+      if (!m) continue;
+      let rest = m[2], note = '';
+      const nm = /\(([^)]*)\)\s*$/.exec(rest);
+      if (nm) { note = nm[1].trim(); rest = rest.slice(0, nm.index).trim(); }
+      const parts = rest.split(',').map((s) => s.trim()).filter(Boolean);
+      const am = parts.find((p) => /^AM\b/i.test(p)) || '';
+      const pm = parts.find((p) => /^PM\b/i.test(p)) || '';
+      res.mice.push({ tag: m[1], am, pm, bupe: /\bbupe\b/i.test(am), note });
+    }
+    return res;
+  }
+
+  // ---------- Sections for one day ----------
+  const splitWindow = (w) => { const p = (w || '').split(/\s*[-–]\s*/); return { start: p[0] || '', end: p[1] || '' }; };
+  const byMin = (a, b) => (a.min ?? 1e9) - (b.min ?? 1e9);
+
+  function buildSections(p, chk) {
+    const sections = [];
+    const tpChip = (tp) => tp ? { t: tp, c: 'accent' } : null;
+    const noteChip = (note) => note ? { t: note, c: 'plain' } : null;
+
+    const am = chk.mice.filter((m) => m.am);
+    if (am.length) sections.push({ id: 'am', title: 'AM weigh + check', pin: -1, rows: am.map((m) => ({
+      key: `am|${m.tag}`, tag: m.tag, what: m.am.replace(/^AM\s*/i, ''), chips: [noteChip(m.note)].filter(Boolean), summary: `AM check ${m.tag}` })) });
+
+    if (p.injuries.length) sections.push({ id: 'inj', title: 'Injuries', rows: p.injuries.map((i) => ({
+      key: `inj|${i.tag}`, time: i.target, min: toMin(i.target), tag: i.tag, what: armLabel(i.arm), chips: [tpChip(i.tp)].filter(Boolean),
+      locked: !!i.actual, lockedLabel: 'Burned ' + i.actual, group: i.block, summary: `Burn ${i.tag} (${i.tp})` })) });
+
+    if (p.bupe.length) sections.push({ id: 'bupe', title: 'Bupe · 48 h dose', rows: p.bupe.map((b) => { const w = splitWindow(b.window); return {
+      key: `bupe|${b.tag}`, time: w.start, timeSub: w.end ? 'to ' + w.end : '', min: toMin(w.start), endMin: toMin(w.end), tag: b.tag, what: '', chips: [], summary: `Bupe ${b.tag}` }; }).sort(byMin) });
+
+    if (p.txa.length) sections.push({ id: 'txa', title: 'TXA doses', rows: p.txa.map((t) => ({
+      key: `txa|${t.tag}|${t.dose}`, time: t.due, min: toMin(t.due), tag: t.tag, what: t.dose + ' dose', chips: [], summary: `TXA ${t.dose} ${t.tag}` })).sort(byMin) });
+
+    if (p.harvests.length) sections.push({ id: 'harv', title: 'Harvests', rows: p.harvests.map((h) => h.info ? { info: h.info, group: h.block } : ({
+      key: `harv|${h.tag}`, time: h.due, timeNone: 'any time', min: toMin(h.due), tag: h.tag, what: armLabel(h.arm),
+      chips: [tpChip(h.tp), h.sameDay ? { t: 'same-day', c: 'plain' } : null].filter(Boolean),
+      locked: !!h.actual, lockedLabel: 'Harvested ' + h.actual, group: h.block, summary: `Harvest ${h.tag} (${h.tp})` })) });
+
+    if (p.imaging.length) sections.push({ id: 'img', title: 'Photos / X-rays', pin: 0.5, rows: p.imaging.map((t, i) => ({ key: `img|${i}`, tag: '', what: t, chips: [], summary: t })) });
+
+    const pm = chk.mice.filter((m) => m.pm);
+    if (pm.length) sections.push({ id: 'pm', title: 'PM check', pin: 1, rows: pm.map((m) => ({
+      key: `pm|${m.tag}`, tag: m.tag, what: m.pm.replace(/^PM\s*/i, ''), chips: [noteChip(m.note)].filter(Boolean), summary: `PM check ${m.tag}` })) });
+
+    const first = (s) => s.pin === -1 ? -1 : s.pin === 1 ? 1e9 : s.pin === 0.5 ? 5e8 : Math.min(5e8 - 1, ...s.rows.map((r) => r.min ?? 5e8 - 1));
+    return sections.sort((a, b) => first(a) - first(b));
+  }
+
+  function summarize(p, chk) {
+    const n = (k, one, many) => k ? `${k} ${k === 1 ? one : many}` : '';
+    const parts = [
+      n(p.injuries.length, 'injury', 'injuries'),
+      n(p.harvests.filter((h) => !h.info).length, 'harvest', 'harvests'),
+      n(p.txa.length, 'TXA dose', 'TXA doses'),
+      n(p.bupe.length, 'bupe', 'bupe'),
+      (chk.mice.some((m) => m.am || m.pm)) ? `${chk.mice.filter((m) => m.am).length} AM / ${chk.mice.filter((m) => m.pm).length} PM checks` : '',
+    ].filter(Boolean);
+    return parts.join(' · ') || 'nothing scheduled';
+  }
+
+  // ---------- Prep for tomorrow (rules live in prep-rules.js) ----------
+  function prepTasks(rules, p, chk) {
+    const info = (tag) => (window.MOUSE_INFO && window.MOUSE_INFO[tag]) || {};
+    const pools = {
+      injury: p.injuries.map((i) => ({ tag: i.tag, tp: i.tp, arm: armLabel(i.arm), time: i.target, txa: /TXA/.test(i.arm) ? 'yes' : 'no', ...info(i.tag) })),
+      harvest: p.harvests.filter((h) => !h.info).map((h) => ({ tag: h.tag, tp: h.tp, arm: armLabel(h.arm), time: h.due, txa: /TXA/.test(h.arm) ? 'yes' : 'no', sameDay: h.sameDay ? 'yes' : 'no', ...info(h.tag) })),
+      txa: [...new Set(p.txa.map((t) => t.tag))].map((tag) => ({ tag, time: (p.txa.find((t) => t.tag === tag) || {}).due || '', ...info(tag) })),
+      bupe: p.bupe.map((b) => ({ tag: b.tag, time: b.window, ...info(b.tag) })),
+      am_check: chk.mice.filter((m) => m.am).map((m) => ({ tag: m.tag, note: m.note, ...info(m.tag) })),
+      pm_check: chk.mice.filter((m) => m.pm).map((m) => ({ tag: m.tag, note: m.note, ...info(m.tag) })),
+    };
+    pools.any = Object.values(pools).some((a) => a.length) ? [{ tag: '' }] : [];
+    const fill = (tpl, it) => String(tpl || '').replace(/\{(\w+)\}/g, (_, k) => it[k] != null ? String(it[k]) : '');
+    const tasks = [];
+    rules.forEach((rule, idx) => {
+      if (!rule || typeof rule !== 'object') return;
+      let items = pools[rule.when] || [];
+      if (rule.match) items = items.filter((it) => Object.entries(rule.match).every(([k, v]) => String(it[k] ?? '').toLowerCase() === String(v).toLowerCase()));
+      if (!items.length) return;
+      const id = rule.id || ('rule' + (idx + 1));
+      if (rule.per === 'mouse') items.forEach((it) => tasks.push({ key: `prep|${id}|${it.tag}`, time: rule.time || '', tag: it.tag, what: fill(rule.task, it), chips: [], summary: fill(rule.task, it) }));
+      else { const it = { n: items.length, tags: items.map((i) => i.tag).filter(Boolean).join(', ') }; tasks.push({ key: `prep|${id}`, time: rule.time || '', tag: '', what: fill(rule.task, it), chips: [], summary: fill(rule.task, it) }); }
+    });
+    return tasks;
+  }
+
+  // ---------- Ticks (shared via TICKS_URL when set; always mirrored on this device) ----------
+  let ticksByDate = {};
+  const tickOf = (dateStr, key) => (ticksByDate[dateStr] || {})[key];
+  function loadLocal() { try { ticksByDate = JSON.parse(localStorage.getItem('runsheet.ticks') || '{}') || {}; } catch (e) { ticksByDate = {}; } }
+  function saveLocal() { try { localStorage.setItem('runsheet.ticks', JSON.stringify(ticksByDate)); } catch (e) { /* storage unavailable */ } }
+  async function fetchJSON(url) {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+  function applyShared(dateStr, res) {
+    if (!res || typeof res.ticks !== 'object') throw new Error('bad answer');
+    ticksByDate[dateStr] = res.ticks;
+    saveLocal();
+  }
+  async function loadShared(dateStr) {
+    if (!TICKS_URL) return;
+    try {
+      applyShared(dateStr, await fetchJSON(`${TICKS_URL}?${qs({ action: 'get', date: dateStr })}`));
+      setTickStatus('ok', 'Ticks shared · synced ' + centralClock(true));
+      render();
+    } catch (e) {
+      setTickStatus('bad', 'Shared ticks unreachable (' + e.message + ') — showing this device’s ticks');
+    }
+  }
+  async function setTick(key, done) {
+    const dateStr = md(view);
+    const by = ($('initials').value || '').trim().toUpperCase();
+    const map = ticksByDate[dateStr] = ticksByDate[dateStr] || {};
+    if (done) map[key] = { by, at: centralClock(false) }; else delete map[key];
+    saveLocal();
+    render();
+    if (!TICKS_URL) return;
+    try {
+      applyShared(dateStr, await fetchJSON(`${TICKS_URL}?${qs({ action: 'set', date: dateStr, key, done: done ? 1 : 0, by })}`));
+      setTickStatus('ok', 'Ticks shared · synced ' + centralClock(true));
+      render();
+    } catch (e) {
+      setTickStatus('bad', 'Tick kept on this device only — shared list unreachable (' + e.message + ')');
+    }
+  }
+
+  // ---------- Rendering ----------
+  function rowHTML(r, dateStr) {
+    if (r.info) return `<div class="row info"><span class="time none"></span><span class="body">${esc(r.info)}</span></div>`;
+    const t = tickOf(dateStr, r.key);
+    const done = !!(r.locked || t);
+    const meta = r.locked ? r.lockedLabel : (t ? [t.by, t.at].filter(Boolean).join(' ') : '');
+    const id = 'cb_' + r.key.replace(/[^\w]+/g, '_');
+    const time = r.time ? `<span class="time">${esc(r.time)}${r.timeSub ? `<small>${esc(r.timeSub)}</small>` : ''}</span>` : `<span class="time none">${esc(r.timeNone || '')}</span>`;
+    return `<label class="row${done ? ' done' : ''}${r.locked ? ' locked' : ''}">
+      <input type="checkbox" id="${id}" data-key="${esc(r.key)}"${done ? ' checked' : ''}${r.locked ? ' disabled' : ''}>
+      ${time}
+      <span class="body">${r.tag ? `<span class="tag">${esc(r.tag)}</span>` : ''}${r.what ? `<span class="what">${esc(r.what)}</span>` : ''}${(r.chips || []).map((c) => `<span class="chip ${c.c || ''}">${esc(c.t)}</span>`).join('')}</span>
+      <span class="meta">${esc(meta)}</span>
+    </label>`;
+  }
+  function sectionHTML(s, dateStr, extraClass) {
+    const tickable = s.rows.filter((r) => !r.info);
+    const doneN = tickable.filter((r) => r.locked || tickOf(dateStr, r.key)).length;
+    const groups = [...new Set(s.rows.map((r) => r.group || ''))];
+    let body = '';
+    if (groups.length > 1) for (const g of groups) body += `<div class="group-label">${esc(g || 'No time range')}</div>` + s.rows.filter((r) => (r.group || '') === g).map((r) => rowHTML(r, dateStr)).join('');
+    else body = s.rows.map((r) => rowHTML(r, dateStr)).join('');
+    const range = (groups.length === 1 && groups[0]) ? groups[0] : (s.subtitle || '');
+    return `<section class="task ${extraClass || ''}" id="sec-${esc(s.id)}"><h2>${esc(s.title)} <span class="count">${doneN}/${tickable.length}</span>${range ? `<span class="range">${esc(range)}</span>` : ''}</h2>${body || '<div class="empty">Nothing here.</div>'}</section>`;
+  }
+  function nextUpHTML(sections, dateStr) {
+    const now = centralNowMin();
+    const items = [];
+    for (const s of sections) for (const r of s.rows) if (!r.info && r.min != null && !(r.locked || tickOf(dateStr, r.key))) items.push({ min: r.min, end: r.endMin ?? r.min, time: r.time, until: r.timeSub ? r.timeSub.replace(/^to\s+/, '') : '', text: r.summary });
+    if (!items.length) return '';
+    items.sort((a, b) => a.min - b.min);
+    const live = items.filter((i) => i.end >= now - 15);
+    const upcoming = live.slice(0, 3);
+    const overdue = items.length - live.length;
+    return `<div class="nextup"><h2>Next up · it is ${esc(fmtMin(now))}</h2><ul>${upcoming.length ? upcoming.map((i) => `<li><span class="t">${esc(i.time)}</span><span>${esc(i.text)}${i.until && i.min <= now ? ' · window open until ' + esc(i.until) : ''}</span></li>`).join('') : '<li>No timed items left today</li>'}</ul>${overdue ? `<div class="late">${overdue} timed item${overdue > 1 ? 's' : ''} from earlier today not ticked</div>` : ''}</div>`;
+  }
+  function prepHTML(dateStr) {
+    const tomorrow = addDays(view, 1), tStr = md(tomorrow);
+    const rules = Array.isArray(window.PREP_RULES) ? window.PREP_RULES : [];
+    const day = days.find((d) => d.date === tStr);
+    const chk = checks[tStr] || { head: '', mice: [] };
+    const p = day ? parseDay(day) : null;
+    let body;
+    if (!p) body = `<div class="empty">${esc(longDate(tomorrow))} is not on the Calendar.</div>`;
+    else {
+      const tasks = prepTasks(rules, p, chk);
+      if (!rules.length) body = `<div class="empty">No prep rules yet (prep-rules.js is empty).</div>`;
+      else if (!tasks.length) body = `<div class="empty">Nothing to prep for ${esc(longDate(tomorrow))}.</div>`;
+      else body = tasks.map((t) => rowHTML(t, dateStr)).join('');
+    }
+    const done = p ? prepTasks(rules, p, chk).filter((t) => tickOf(dateStr, t.key)).length : 0;
+    const total = p ? prepTasks(rules, p, chk).length : 0;
+    return `<section class="task prep"><h2>Prep for tomorrow <span class="count">${total ? `${done}/${total} · ` : ''}${esc(longDate(tomorrow))}</span><span class="range">${p ? esc(summarize(p, chk)) : ''}</span></h2>${body}</section>`;
+  }
+
+  let days = [], checks = {}, lastRead = '', view = centralToday();
+  function render() {
+    try { renderInner(); }
+    catch (e) { $('main').innerHTML = `<div class="notice bad">Page error while drawing ${esc(md(view))}: ${esc(e.message)}</div>`; }
+  }
+  function renderInner() {
+    const dateStr = md(view);
+    const isToday = dateStr === md(centralToday());
+    $('dateLabel').textContent = longDate(view);
+    $('todayBtn').hidden = isToday;
+    const day = days.find((d) => d.date === dateStr);
+    let html = '';
+    if (!days.length) html = `<div class="empty">${lastRead ? 'No data.' : 'Reading the Sheet…'}</div>`;
+    else if (!day) html = `<div class="notice info">${esc(longDate(view))} is not on the Calendar.</div>` + prepHTML(dateStr);
+    else {
+      const p = parseDay(day);
+      const chk = checks[dateStr] || { head: '', mice: [] };
+      const sections = buildSections(p, chk);
+      for (const t of p.info) html += `<div class="notice info">${esc(t)}</div>`;
+      if (isToday) html += nextUpHTML(sections, dateStr);
+      if (!sections.length) html += `<div class="notice info">Nothing scheduled for ${esc(longDate(view))}.</div>`;
+      for (const s of sections) html += sectionHTML(s, dateStr);
+      if (p.notes.length) html += `<section class="task"><h2>Notes</h2><div class="notes">${esc(p.notes.join('\n'))}</div></section>`;
+      html += prepHTML(dateStr);
+      if (p.warnings.length) html += `<div class="notice warn">Sheet check for ${esc(dateStr)}:\n${esc(p.warnings.join('\n'))}</div>`;
+    }
+    $('main').innerHTML = html;
+  }
+  function setSheetStatus(kind, text) { $('sheetStatus').innerHTML = `<span class="dot${kind === 'ok' ? '' : ' ' + kind}"></span>${esc(text)}`; }
+  function setTickStatus(kind, text) { $('tickStatus').innerHTML = `<span class="dot${kind === 'ok' ? '' : ' ' + kind}"></span>${esc(text)}`; }
+
+  async function refreshSheet() {
+    let cal, chk;
+    try {
+      [cal, chk] = await Promise.all([fetchTable('Calendar'), fetchTable('Checks')]);
+    } catch (e) {
+      setSheetStatus('bad', `Couldn’t reach the Sheet at ${centralClock(true)}${lastRead ? ' — showing the ' + lastRead + ' read' : ''} (${e.message})`);
+      if (!days.length) render();
+      return;
+    }
+    days = buildDays(cal);
+    checks = buildChecks(chk);
+    lastRead = centralClock(true);
+    setSheetStatus('ok', `Sheet read ${lastRead} · again every ${SHEET_REFRESH_MS / 1000} s`);
+    render();
+  }
+
+  // ---------- Wiring ----------
+  function go(d) { view = d; render(); loadShared(md(view)); }
+  $('prev').addEventListener('click', () => go(addDays(view, -1)));
+  $('next').addEventListener('click', () => go(addDays(view, 1)));
+  $('todayBtn').addEventListener('click', () => go(centralToday()));
+  $('refresh').addEventListener('click', () => { setSheetStatus('off', 'Reading the Sheet…'); refreshSheet(); loadShared(md(view)); });
+  $('main').addEventListener('change', (e) => { const el = e.target; if (el && el.matches('input[type=checkbox][data-key]') && !el.disabled) setTick(el.dataset.key, el.checked); });
+  try { $('initials').value = localStorage.getItem('runsheet.initials') || ''; } catch (e) { /* storage unavailable */ }
+  $('initials').addEventListener('input', () => { try { localStorage.setItem('runsheet.initials', $('initials').value.trim().toUpperCase()); } catch (e) { /* storage unavailable */ } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshSheet(); loadShared(md(view)); } });
+  setInterval(refreshSheet, SHEET_REFRESH_MS);
+  setInterval(() => { if (!document.hidden) loadShared(md(view)); }, TICK_POLL_MS);
+  setInterval(() => { if (!document.hidden) render(); }, 60000);
+
+  loadLocal();
+  setTickStatus(TICKS_URL ? 'off' : 'off', TICKS_URL ? 'Ticks shared · connecting…' : 'Ticks stay on this device (shared list not set up yet)');
+  render();
+  refreshSheet();
+  loadShared(md(view));
+})();
+</script>
+</body>
+</html>
