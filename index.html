@@ -64,7 +64,26 @@
   .cal .grid { position: relative; margin-left: 44px; }
   .cal .hr { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
   .cal .hr b { position: absolute; left: -46px; top: -7px; width: 40px; text-align: right; font-size: 11px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .cal .ev { position: absolute; border-radius: 8px; background: color-mix(in srgb, var(--c) 24%, var(--tile)); border-left: 3px solid var(--c); padding: 3px 8px; min-height: 22px; overflow: hidden; font-size: 12.5px; line-height: 1.25; }
+  .cal .ev { position: absolute; border-radius: 8px; background: color-mix(in srgb, var(--c) 24%, var(--tile)); border-left: 3px solid var(--c); padding: 3px 8px; min-height: 22px; overflow: hidden; font-size: 12.5px; line-height: 1.25; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; transition: transform .1s ease-out, filter .15s; }
+  .cal .ev:active { transform: scale(0.98); }
+  .cal .ev.open { filter: brightness(1.25); box-shadow: 0 0 0 1.5px var(--c); }
+
+  /* ---------- block popover ---------- */
+  .scrim { position: fixed; inset: 0; z-index: 19; background: transparent; }
+  .pop { position: fixed; z-index: 20; width: 380px; max-height: 72vh; overflow: auto; background: #27272B; border-radius: 18px; box-shadow: 0 24px 60px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.08); padding: 14px 16px 8px; transform-origin: var(--origin, right center); animation: popin .16s cubic-bezier(0.23, 1, 0.32, 1); }
+  @keyframes popin { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+  .pop h3 { margin: 0 0 1px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; color: var(--c); display: flex; align-items: baseline; gap: 10px; padding-right: 28px; }
+  .pop h3 .n { margin-left: auto; font-size: 13px; font-weight: 500; color: var(--muted); }
+  .pop .rng { font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+  .pop .ln { grid-template-columns: 92px minmax(0, 1fr) 26px; min-height: 46px; }
+  .pop .ln .t { font-size: 19px; }
+  .pop .ln .w .x { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+  .pop .ln.done .w .x { color: var(--dim); }
+  .pop .close { position: absolute; top: 10px; right: 12px; width: 28px; height: 28px; border-radius: 50%; background: var(--tile-2); color: var(--muted); display: grid; place-items: center; cursor: pointer; font-size: 16px; }
+  @media (max-width: 900px) {
+    .scrim { background: rgba(0,0,0,0.45); }
+    .pop { left: 10px !important; right: 10px; bottom: 10px; top: auto !important; width: auto; max-height: 65vh; border-radius: 20px; --origin: bottom center; }
+  }
   .cal .ev b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cal .ev span { color: var(--muted); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .cal .ev.done { opacity: .4; }
@@ -493,19 +512,50 @@
   // ---------- Rendering ----------
   let days = [], checks = {}, lastRead = '', view = centralToday();
   let nowItem = null, lateItems = [], pendingTimed = [];
+  let current = null, calBlocks = [], popId = null;
 
   function lineState(l, dateStr) {
     const t = l.locked ? null : tickOf(dateStr, l.key);
     return { done: !!(l.locked || t), tick: t };
   }
-  function lineHTML(l, dateStr, isToday, nowMin, nextKey) {
+  function lineHTML(l, dateStr, isToday, nowMin, nextKey, detail) {
     const st = lineState(l, dateStr);
     const end = l.endMin ?? l.min;
     const late = isToday && !st.done && end != null && end < nowMin;
     const cls = ['ln', st.done ? 'done' : '', l.locked ? 'locked' : '', (!st.done && l.key === nextKey) ? 'next' : '', late ? 'late' : ''].filter(Boolean).join(' ');
     const time = l.timeLabel ? `<span class="t">${esc(l.timeLabel)}</span>` : (l.time && l.min != null ? timeHTML(l.time) : `<span class="t none">${esc(l.time || l.timeNone || '')}</span>`);
     const meta = l.locked ? l.meta : (st.tick ? [st.tick.by, st.tick.at].filter(Boolean).join(' · ') : '');
-    return `<div class="${cls}" data-key="${esc(l.key)}"${l.locked ? ' data-locked="1"' : ''}>${time}<span class="w">${l.label ? `<b>${esc(l.label)}</b>` : ''}${l.sub ? `<span class="s">${esc(l.sub)}</span>` : ''}${meta ? `<span class="m">${esc(meta)}</span>` : ''}${l.ids ? `<span class="d">${esc(l.ids)}</span>` : ''}</span><span class="c">${CHECK}</span></div>`;
+    return `<div class="${cls}" data-key="${esc(l.key)}"${l.locked ? ' data-locked="1"' : ''}>${time}<span class="w">${l.label ? `<b>${esc(l.label)}</b>` : ''}${l.sub ? `<span class="s">${esc(l.sub)}</span>` : ''}${meta ? `<span class="m">${esc(meta)}</span>` : ''}${l.ids ? `<span class="d">${esc(l.ids)}</span>` : ''}${detail ? `<span class="x">${esc(detail)}</span>` : ''}</span><span class="c">${CHECK}</span></div>`;
+  }
+
+  // What a line means, for the calendar popover: planned vs actual, what a burn triggers, each mouse's window, the check list.
+  function detailFor(l, tileId) {
+    const c = current; if (!c || !c.p) return '';
+    const tag = l.label && /^\d{5}$/.test(l.label) ? l.label : null;
+    const burnOf = (tg) => c.p.injuries.find((x) => x.tag === tg);
+    if (tileId === 'burn' && tag) {
+      const i = burnOf(tag), parts = [];
+      if (i && i.arm) parts.push(armLabel(i.arm));
+      const txa = c.p.txa.filter((x) => x.tag === tag).map((x) => x.due).filter(Boolean);
+      if (txa.length) parts.push('then TXA at ' + txa.join(' and '));
+      const h = c.p.harvests.find((x) => !x.info && x.tag === tag);
+      if (h && h.due) parts.push('harvest at ' + h.due);
+      return parts.join(' · ');
+    }
+    if ((tileId === 'txa' || tileId === 'harv') && tag) {
+      const i = burnOf(tag);
+      if (i) return (i.actual ? `burned at ${i.actual}` : `burn planned ${i.target}`) + (i.arm ? ' · ' + armLabel(i.arm) : '');
+      return tileId === 'txa' ? 'burned on an earlier day' : '';
+    }
+    if (tileId === 'bupe') {
+      const tags = l.ids ? l.ids.split(' · ') : [l.label];
+      return tags.map((tg) => { const b = c.p.bupe.find((x) => x.tag === tg); const w = b ? splitWindow(b.window) : null; return w && w.end ? `${tg} until ${w.end}` : tg; }).join(' · ');
+    }
+    if (tileId === 'chk') {
+      const kind = l.key.startsWith('am') ? 'am' : 'pm';
+      return c.chk.mice.filter((m) => m[kind]).map((m) => m.tag + (m.note ? ` (${m.note.toLowerCase()})` : (kind === 'am' && m.bupe ? ' (+ bupe)' : ''))).join(' · ');
+    }
+    return '';
   }
   function tileHTML(t, dateStr, isToday, nowMin, nextKey, order) {
     const doneN = t.lines.filter((l) => lineState(l, dateStr).done).length;
@@ -578,11 +628,11 @@
       if (!ls.length) continue;
       if (t.id === 'burn' || t.id === 'harv') {
         const gap = t.id === 'burn' ? 20 : 30;
-        blocks.push({ start: ls[0].min, end: ls[ls.length - 1].min + gap, color: t.color, title: ls.length === 1 ? (t.id === 'burn' ? 'Burn ' : 'Harvest ') + ls[0].label : `${ls.length} ${t.id === 'burn' ? 'burns' : 'harvests'}`, done: doneAll(ls), late: lateAny(ls) });
+        blocks.push({ id: 'cal|' + t.id, tileId: t.id, lines: ls, start: ls[0].min, end: ls[ls.length - 1].min + gap, color: t.color, title: ls.length === 1 ? (t.id === 'burn' ? 'Burn ' : 'Harvest ') + ls[0].label : `${ls.length} ${t.id === 'burn' ? 'burns' : 'harvests'}`, done: doneAll(ls), late: lateAny(ls) });
       } else if (t.id === 'bupe') {
-        for (const l of ls) blocks.push({ start: l.min, end: l.endMin ?? l.min + 120, color: t.color, title: l.ids ? `Bupe · ${l.label}` : `Bupe ${l.label}`, done: doneAll([l]), late: lateAny([l]) });
+        for (const l of ls) blocks.push({ id: 'cal|' + l.key, tileId: 'bupe', lines: [l], start: l.min, end: l.endMin ?? l.min + 120, color: t.color, title: l.ids ? `Bupe · ${l.label}` : `Bupe ${l.label}`, done: doneAll([l]), late: lateAny([l]) });
       } else if (t.id === 'txa') {
-        for (const l of ls) blocks.push({ start: l.min, end: l.min + 25, color: t.color, title: `TXA ${l.label}`, sub: l.sub, done: doneAll([l]), late: lateAny([l]) });
+        for (const l of ls) blocks.push({ id: 'cal|' + l.key, tileId: 'txa', lines: [l], start: l.min, end: l.min + 25, color: t.color, title: `TXA ${l.label}`, sub: l.sub, done: doneAll([l]), late: lateAny([l]) });
       }
     }
     const chk = tiles.find((t) => t.id === 'chk');
@@ -590,9 +640,10 @@
     const last = blocks.length ? Math.max(...blocks.map((b) => b.end)) : 17 * 60;
     if (chk) {
       const am = chk.lines.find((l) => l.key === 'am|all'), pm = chk.lines.find((l) => l.key === 'pm|all');
-      if (am) blocks.push({ start: first - 60, end: first, color: chk.color, title: 'AM checks', soft: true, done: doneAll([am]) });
-      if (pm) blocks.push({ start: last, end: last + 60, color: chk.color, title: 'PM check', soft: true, done: doneAll([pm]) });
+      if (am) blocks.push({ id: 'cal|am', tileId: 'chk', lines: [am], start: first - 60, end: first, color: chk.color, title: 'AM checks', soft: true, done: doneAll([am]) });
+      if (pm) blocks.push({ id: 'cal|pm', tileId: 'chk', lines: [pm], start: last, end: last + 60, color: chk.color, title: 'PM check', soft: true, done: doneAll([pm]) });
     }
+    calBlocks = blocks;
     if (!blocks.length) return '';
     const h0 = Math.min(7, Math.floor(Math.min(...blocks.map((b) => b.start)) / 60));
     const h1 = Math.max(19, Math.ceil(Math.max(...blocks.map((b) => b.end)) / 60));
@@ -612,7 +663,7 @@
     for (let h = h0; h <= h1; h++) html += `<div class="hr" style="top:${y(h * 60)}px"><b>${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}</b></div>`;
     for (const b of blocks) {
       const n = b.cluster.cols.length, w = 100 / n;
-      html += `<div class="ev${b.done ? ' done' : ''}${b.late ? ' late' : ''}${b.soft ? ' soft' : ''}" style="--c:${b.color};top:${y(b.start)}px;height:${Math.max(22, (b.end - b.start) * PX_PER_MIN - 2)}px;left:calc(${b.col * w}% + ${b.col ? 3 : 0}px);width:calc(${w}% - ${n > 1 ? 3 : 0}px)"><b>${esc(b.title)}</b><span>${b.soft ? (b.title.startsWith('AM') ? 'before the first task' : 'after the last task') : esc(b.sub ? fmtMin(b.start) + ' · ' + b.sub : fmtMin(b.start) + ' – ' + fmtMin(b.end))}</span></div>`;
+      html += `<div class="ev${b.done ? ' done' : ''}${b.late ? ' late' : ''}${b.soft ? ' soft' : ''}${popId === b.id ? ' open' : ''}" data-bid="${esc(b.id)}" style="--c:${b.color};top:${y(b.start)}px;height:${Math.max(22, (b.end - b.start) * PX_PER_MIN - 2)}px;left:calc(${b.col * w}% + ${b.col ? 3 : 0}px);width:calc(${w}% - ${n > 1 ? 3 : 0}px)"><b>${esc(b.title)}</b><span>${b.soft ? (b.title.startsWith('AM') ? 'before the first task' : 'after the last task') : esc(b.sub ? fmtMin(b.start) + ' · ' + b.sub : fmtMin(b.start) + ' – ' + fmtMin(b.end))}</span></div>`;
     }
     if (isToday && nowMin >= h0 * 60 && nowMin <= h1 * 60) html += `<div class="nowline" style="top:${y(nowMin)}px"></div>`;
     return `<section class="cal"><h2>Day<span class="n">${esc(fmtMin(h0 * 60))} – ${esc(fmtMin(h1 * 60))}</span></h2><div class="grid" style="height:${H}px">${html}</div></section>`;
@@ -647,6 +698,7 @@
     const doneN = all.filter((l) => lineState(l, dateStr).done).length;
     $('progress').innerHTML = all.length ? `<b>${doneN}</b> of ${all.length} done` : '';
     $('notices').innerHTML = notices.map((n) => `<div class="notice ${n.cls}">${esc(n.text)}</div>`).join('');
+    current = { p, chk, tiles, dateStr, isToday, nowMin };
     nowHTML(tiles, dateStr, isToday, nowMin);
     const nextKey = nowItem ? nowItem.key : (pendingTimed[0] ? pendingTimed[0].key : null);
     const tmrw = tomorrowTile();
@@ -657,6 +709,7 @@
     for (const c of [1, 2, 3]) html += `<div class="colm">${col[c].map((id) => byId[id] ? tileHTML(byId[id], dateStr, isToday, nowMin, nextKey, order[id]) : '').join('')}</div>`;
     html += calendarHTML(tiles, dateStr, isToday, nowMin);
     $('board').innerHTML = html;
+    if (popId) renderPop();
     updateTitle();
   }
   function updateTitle() { document.title = lateItems.length ? `⏰ ${lateItems.length} late · Run sheet` : (nowItem ? `${nowItem.time} ${nowItem.summary} · Run sheet` : 'Run sheet'); }
@@ -742,12 +795,59 @@
     }
   }
 
+  // ---------- Calendar block popover ----------
+  function openPop(bid, anchor) {
+    if (popId === bid) return closePop();
+    popId = bid;
+    let scrim = $('scrim'), pop = $('pop');
+    if (!scrim) { scrim = document.createElement('div'); scrim.id = 'scrim'; scrim.className = 'scrim'; document.body.appendChild(scrim); scrim.addEventListener('click', closePop); }
+    if (!pop) {
+      pop = document.createElement('div'); pop.id = 'pop'; pop.className = 'pop'; document.body.appendChild(pop);
+      pop.addEventListener('click', (e) => {
+        if (e.target.closest('.close')) return closePop();
+        const el = e.target.closest('.ln[data-key]');
+        if (el && !el.dataset.locked) setTick(el.dataset.key, !el.classList.contains('done'));
+      });
+    }
+    renderPop();
+    const r = anchor.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    if (vw > 900) {
+      const w = pop.offsetWidth, h = pop.offsetHeight;
+      let left = r.left - w - 12, origin = 'right center';
+      if (left < 8) { left = Math.min(vw - w - 8, r.right + 12); origin = 'left center'; }
+      const top = Math.min(Math.max(8, r.top + r.height / 2 - h / 2), Math.max(8, vh - h - 8));
+      pop.style.left = left + 'px'; pop.style.top = top + 'px'; pop.style.setProperty('--origin', origin);
+    }
+    document.querySelectorAll('.cal .ev.open').forEach((e) => e.classList.remove('open'));
+    anchor.classList.add('open');
+  }
+  function closePop() {
+    popId = null;
+    const scrim = $('scrim'), pop = $('pop');
+    if (scrim) scrim.remove();
+    if (pop) pop.remove();
+    document.querySelectorAll('.cal .ev.open').forEach((e) => e.classList.remove('open'));
+  }
+  function renderPop() {
+    const pop = $('pop'); if (!pop || !current) return;
+    const b = calBlocks.find((x) => x.id === popId);
+    if (!b) return closePop();
+    const c = current;
+    const doneN = b.lines.filter((l) => lineState(l, c.dateStr).done).length;
+    const rng = b.soft ? (b.title.startsWith('AM') ? 'before the first timed task' : 'after the last timed task') : (b.sub ? `${fmtMin(b.start)} · ${b.sub}` : `${fmtMin(b.start)} – ${fmtMin(b.end)}`);
+    pop.style.setProperty('--c', b.color);
+    pop.innerHTML = `<span class="close" role="button" aria-label="Close">×</span><h3>${esc(b.title)}<span class="n">${doneN} of ${b.lines.length}</span></h3><p class="rng">${esc(rng)}</p>` + b.lines.map((l) => lineHTML(l, c.dateStr, c.isToday, c.nowMin, null, detailFor(l, b.tileId))).join('');
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
+
   // ---------- Wiring ----------
-  function go(d) { view = d; render(); loadShared(md(view)); }
+  function go(d) { closePop(); view = d; render(); loadShared(md(view)); }
   $('prev').addEventListener('click', () => go(addDays(view, -1)));
   $('next').addEventListener('click', () => go(addDays(view, 1)));
   $('todayBtn').addEventListener('click', () => go(centralToday()));
   $('board').addEventListener('click', (e) => {
+    const ev = e.target.closest('.ev[data-bid]');
+    if (ev) return openPop(ev.dataset.bid, ev);
     const el = e.target.closest('.ln[data-key]');
     if (!el || el.dataset.locked) return;
     setTick(el.dataset.key, !el.classList.contains('done'));
